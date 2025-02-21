@@ -69,7 +69,7 @@ async def delete_article(
     db_article = db.query(Article).filter(Article.id == article_id).first()
     if not db_article:
         raise HTTPException(status_code=404, detail="Article not found")
-    
+
     db.delete(db_article)
     db.commit()
     return {"message": "Article deleted"}
