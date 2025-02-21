@@ -1,6 +1,7 @@
+"""User models for database and API schemas."""
 from sqlalchemy import Column, Integer, String, Boolean
-from database.config import Base
 from pydantic import BaseModel
+from database.config import Base
 
 
 class UserDB(Base):

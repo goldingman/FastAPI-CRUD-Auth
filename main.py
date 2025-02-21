@@ -1,3 +1,4 @@
+"""Main file for FastAPI application."""
 from fastapi import FastAPI
 from middleware.article import router as article_router
 from middleware.auth import router as auth_router

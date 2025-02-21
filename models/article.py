@@ -1,7 +1,8 @@
+"""Article models for database and API schemas."""
 from sqlalchemy import Column, Integer, String, Float
-from database.config import Base
 # Pydantic models for request/response
 from pydantic import BaseModel
+from database.config import Base
 
 
 class Article(Base):

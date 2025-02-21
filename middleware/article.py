@@ -1,6 +1,7 @@
+"""Article middleware for CRUD operations."""
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException
 from models.article import Article, ArticleCreate, ArticleResponse
 from models.user import UserDB
 from middleware.auth import get_current_user

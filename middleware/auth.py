@@ -1,9 +1,10 @@
+"""Authentication middleware."""
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
 from database.config import get_db
 from models.user import UserDB, UserCreate, UserResponse
 
