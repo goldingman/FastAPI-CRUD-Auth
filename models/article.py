@@ -3,6 +3,7 @@ from database.config import Base
 # Pydantic models for request/response
 from pydantic import BaseModel
 
+
 class Article(Base):
     """Database model for articles."""
     __tablename__ = "articles"

@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean
 from database.config import Base
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 
 class UserDB(Base):
