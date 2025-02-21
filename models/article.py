@@ -1,16 +1,33 @@
+from sqlalchemy import Column, Integer, String, Float
+from database.config import Base
+# Pydantic models for request/response
 from pydantic import BaseModel
 
+class Article(Base):
+    """Database model for articles."""
+    __tablename__ = "articles"
 
-class Article(BaseModel):
-    """Schema for article information."""
-    id: int
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), index=True)
+    price = Column(Float)
+
+
+class ArticleBase(BaseModel):
+    """Base schema for article information."""
     name: str
     price: float
 
-    def to_dict(self):
-        """Convert article to dictionary."""
-        return {
-            "id": self.id,
-            "name": self.name,
-            "price": self.price
-        }
+
+class ArticleCreate(ArticleBase):
+    """Schema for creating article."""
+    pass
+
+
+class ArticleResponse(ArticleBase):
+    """Schema for article response."""
+    id: int
+
+
+class Config:
+    """Configure Pydantic to read ORM objects."""
+    orm_mode = True

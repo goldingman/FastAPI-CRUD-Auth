@@ -1,8 +1,10 @@
 from typing import List
-
-from fastapi import APIRouter, Depends
-from models.article import Article
-from middleware.auth import get_current_user, User
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from models.article import Article, ArticleCreate, ArticleResponse
+from models.user import UserDB
+from middleware.auth import get_current_user
+from database.config import get_db
 
 
 __all__ = ['router']
@@ -13,41 +15,61 @@ router = APIRouter(
     tags=["articles"]
 )
 
-articles = []
 
-
-@router.get("/", response_model=List[Article])
-async def read_articles(current_user: User = Depends(get_current_user)):
+@router.get("/", response_model=List[ArticleResponse])
+async def read_articles(
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user)
+):
     """Retrieve all articles."""
-    return articles
+    return db.query(Article).all()
 
 
-@router.post("/", response_model=Article)
+@router.post("/", response_model=ArticleResponse)
 async def create_article(
-    article: Article,
-    current_user: User = Depends(get_current_user)
+    article: ArticleCreate,
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user)
 ):
     """Create a new article."""
-    articles.append(article)
-    return article
+    db_article = Article(**article.dict())
+    db.add(db_article)
+    db.commit()
+    db.refresh(db_article)
+    return db_article
 
 
-@router.put("/{article_id}", response_model=Article)
+@router.put("/{article_id}", response_model=ArticleResponse)
 async def update_article(
     article_id: int,
-    article: Article,
-    current_user: User = Depends(get_current_user)
+    article: ArticleCreate,
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user)
 ):
     """Update an article by ID."""
-    articles[article_id] = article
-    return article
+    db_article = db.query(Article).filter(Article.id == article_id).first()
+    if not db_article:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    for key, value in article.dict().items():
+        setattr(db_article, key, value)
+
+    db.commit()
+    db.refresh(db_article)
+    return db_article
 
 
 @router.delete("/{article_id}")
 async def delete_article(
     article_id: int,
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user)
 ):
     """Delete an article by ID."""
-    del articles[article_id]
-    return {"message": "Article deleted"} 
+    db_article = db.query(Article).filter(Article.id == article_id).first()
+    if not db_article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    
+    db.delete(db_article)
+    db.commit()
+    return {"message": "Article deleted"}

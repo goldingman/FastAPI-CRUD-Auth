@@ -2,10 +2,13 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from jose import JWTError, jwt
-from pydantic import BaseModel
 from passlib.context import CryptContext
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+
+from database.config import get_db
+from models.user import UserDB, UserCreate, UserResponse
 
 
 # Security configs
@@ -19,55 +22,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 router = APIRouter(tags=["authentication"])
 
 
-class Token(BaseModel):
-    """Schema for the authentication token response."""
-    access_token: str
-    token_type: str
-
-    def is_active(self):
-        """Check if user is active."""
-        return not self.disabled
-
-    def to_dict(self):
-        """Convert token to dictionary."""
-        return {
-            "access_token": self.access_token,
-            "token_type": self.token_type
-        }
-
-
-class User(BaseModel):
-    """Schema for user information."""
-    username: str
-    email: Optional[str] = None
-    disabled: Optional[bool] = False
-
-    def is_active(self):
-        """Check if user is active."""
-        return not self.disabled
-
-    def to_dict(self):
-        """Convert user to dictionary."""
-        return {
-            "username": self.username,
-            "email": self.email,
-            "disabled": self.disabled
-        }
-
-
-class UserInDB(User):
-    """Schema for user information stored in database."""
-    hashed_password: str
-
-    def verify_password(self, password: str):
-        """Verify password matches hash."""
-        return pwd_context.verify(password, self.hashed_password)
-
-
-# Simulate user database
-fake_users_db = {}
-
-
 def verify_password(plain_password, hashed_password):
     """Verify password against hash."""
     return pwd_context.verify(plain_password, hashed_password)
@@ -78,12 +32,9 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-def get_user(username: str):
+def get_user(db: Session, username: str):
     """Get user from database."""
-    if username in fake_users_db:
-        user_dict = fake_users_db[username]
-        return UserInDB(**user_dict)
-    return None
+    return db.query(UserDB).filter(UserDB.username == username).first()
 
 
 def create_access_token(data: dict):
@@ -95,7 +46,10 @@ def create_access_token(data: dict):
     return encoded_jwt
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
     """Get current user from token."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -109,33 +63,44 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             raise credentials_exception
     except JWTError as exc:
         raise credentials_exception from exc
-    user = get_user(username)
+
+    user = get_user(db, username)
     if user is None:
         raise credentials_exception
     return user
 
 
-@router.post("/register")
-async def register(username: str, email: str, password: str):
+@router.post("/register", response_model=UserResponse)
+async def register(user: UserCreate, db: Session = Depends(get_db)):
     """Register a new user."""
-    if username in fake_users_db:
+    # Check if username exists
+    db_user = get_user(db, user.username)
+    if db_user:
         raise HTTPException(
             status_code=400,
             detail="Username already registered"
         )
-    hashed_password = get_password_hash(password)
-    fake_users_db[username] = {
-        "username": username,
-        "email": email,
-        "hashed_password": hashed_password
-    }
-    return {"message": "User created successfully"}
+
+    # Create new user
+    hashed_password = get_password_hash(user.password)
+    db_user = UserDB(
+        username=user.username,
+        email=user.email,
+        hashed_password=hashed_password
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
 
 
-@router.post("/token", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+@router.post("/token")
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
     """Login to get access token."""
-    user = get_user(form_data.username)
+    user = get_user(db, form_data.username)
     if not user or not verify_password(
         form_data.password,
         user.hashed_password
@@ -145,5 +110,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
     access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.get("/users/me", response_model=UserResponse)
+async def read_users_me(current_user: UserDB = Depends(get_current_user)):
+    """Get current user profile."""
+    return current_user
